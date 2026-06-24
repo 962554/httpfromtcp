@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 )
 
 const (
@@ -27,10 +28,15 @@ func main() {
 	defer file.Close()
 
 	buf := make([]byte, bufSize)
+
+	var s strings.Builder
+
 	for {
 		n, err := file.Read(buf)
 		if err != nil {
 			if n == 0 && errors.Is(err, io.EOF) {
+				log.Printf("read: %s\n", s.String())
+
 				break
 			}
 
@@ -39,6 +45,20 @@ func main() {
 			break
 		}
 
-		log.Printf("read: %s\n", string(buf[:n]))
+		parts := strings.Split(string(buf[:n]), "\n")
+
+		for i, part := range parts {
+			if i >= 1 {
+				log.Printf("read: %s\n", s.String())
+				s.Reset()
+			}
+
+			_, err = s.WriteString(part)
+			if err != nil {
+				log.Printf("error writing to strings.Builder: %s", err)
+
+				break
+			}
+		}
 	}
 }
