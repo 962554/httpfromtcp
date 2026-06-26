@@ -25,40 +25,55 @@ func main() {
 	if err != nil {
 		log.Fatalf("error opening file: %s for reading: %s", msgFile, err)
 	}
-	defer file.Close()
+
+	for line := range getLinesChannel(file) {
+		log.Println("read:", line)
+	}
+}
+
+func getLinesChannel(f io.ReadCloser) <-chan string {
+	lines := make(chan string)
 
 	buf := make([]byte, bufSize)
 
 	var s strings.Builder
 
-	for {
-		n, err := file.Read(buf)
-		if err != nil {
-			if n == 0 && errors.Is(err, io.EOF) {
-				log.Printf("read: %s\n", s.String())
+	go func() {
+		defer f.Close()
+		defer close(lines)
 
-				break
-			}
-
-			log.Printf("error reading file: %s: %s\n", msgFile, err)
-
-			break
-		}
-
-		parts := strings.Split(string(buf[:n]), "\n")
-
-		for i, part := range parts {
-			if i >= 1 {
-				log.Printf("read: %s\n", s.String())
-				s.Reset()
-			}
-
-			_, err = s.WriteString(part)
+		for {
+			n, err := f.Read(buf)
 			if err != nil {
-				log.Printf("error writing to strings.Builder: %s", err)
+				if n == 0 && errors.Is(err, io.EOF) {
+					lines <- s.String()
 
-				break
+					return
+				}
+
+				log.Printf("error reading file: %s: %s\n", msgFile, err)
+
+				return
+			}
+
+			parts := strings.Split(string(buf[:n]), "\n")
+
+			for i, part := range parts {
+				if i >= 1 {
+					lines <- s.String()
+
+					s.Reset()
+				}
+
+				_, err = s.WriteString(part)
+				if err != nil {
+					log.Printf("error writing to strings.Builder: %s", err)
+
+					break
+				}
 			}
 		}
-	}
+	}()
+
+	return lines
 }
