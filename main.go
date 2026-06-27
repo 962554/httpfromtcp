@@ -7,27 +7,43 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
-	"os"
+	"net"
 	"strings"
 )
 
 const (
 	msgFile = "messages.txt"
 	bufSize = 8
+	port    = "42069"
+	address = "0:" + port
 )
 
 func main() {
 	log.SetFlags(0)
 
-	file, err := os.Open(msgFile)
+	l, err := net.Listen("tcp4", address)
 	if err != nil {
-		log.Fatalf("error opening file: %s for reading: %s", msgFile, err)
+		log.Fatalf("error listening on %s: %s", address, err)
 	}
+	defer l.Close()
 
-	for line := range getLinesChannel(file) {
-		log.Println("read:", line)
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Printf("error on accept: %s", err)
+
+			continue
+		}
+
+		fmt.Println("connection accepted")
+
+		for line := range getLinesChannel(conn) {
+			log.Println(line)
+		}
+		fmt.Println("connection closed")
 	}
 }
 
