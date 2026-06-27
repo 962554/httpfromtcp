@@ -14,36 +14,49 @@ import (
 )
 
 type Request struct {
-	RequestLine RequestLine
+	Line Line
 }
 
-type RequestLine struct {
-	HttpVersion   string
-	RequestTarget string
-	Method        string
+type Line struct {
+	HTTPVersion string
+	Target      string
+	Method      string
 }
 
-var methods = map[string]any{
-	"GET":  struct{}{},
-	"POST": struct{}{},
-	"HEAD": struct{}{},
-}
+func FromReader(reader io.Reader) (*Request, error) {
+	mesg, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("error reading all: %w", err)
+	}
 
-func RequestFromReader(reader io.Reader) (*Request, error) {
-	b, err := io.ReadAll(reader)
+	reqLine, err := LineParse(string(mesg))
 	if err != nil {
 		return nil, err
 	}
 
-	mesg := string(b)
+	return &Request{Line: *reqLine}, nil
+}
+
+func LineParse(mesg string) (*Line, error) {
+	methods := map[string]any{
+		"GET":  struct{}{},
+		"POST": struct{}{},
+		"HEAD": struct{}{},
+	}
+
+	const (
+		lineParts    = 3
+		versionParts = 2
+	)
+
 	parts := strings.Split(mesg, "\r\n")
 	reqLine := parts[0]
 	log.Println("parsing:", reqLine)
 
 	reqParts := strings.Split(reqLine, " ")
 	// ensure request-line has 3 parts
-	if len(reqParts) != 3 {
-		return nil, fmt.Errorf("malformed request-line: got %d parts, expecting: 3 parts", len(reqParts))
+	if len(reqParts) != lineParts {
+		return nil, fmt.Errorf("malformed request-line: got %d parts, expecting: %d parts", len(reqParts), lineParts)
 	}
 
 	method, target, httpVersion := reqParts[0], reqParts[1], reqParts[2]
@@ -55,11 +68,12 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		return nil, fmt.Errorf("target: %s does not start with /", target)
 	}
 
-	versionParts := strings.Split(httpVersion, "/")
-	if len(versionParts) != 2 {
-		return nil, fmt.Errorf("malformed version: there should only be one /")
+	verParts := strings.Split(httpVersion, "/")
+	if len(verParts) != versionParts {
+		return nil, fmt.Errorf("malformed version: got %d parts, expecting: %d parts", len(verParts), versionParts)
 	}
-	prefix, version := versionParts[0], versionParts[1]
+
+	prefix, version := verParts[0], verParts[1]
 	if prefix != "HTTP" {
 		return nil, fmt.Errorf("malformed version: got: %s, expected: HTTP", prefix)
 	}
@@ -68,5 +82,5 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		return nil, fmt.Errorf("malformed version: got: %s, expected: 1.1", version)
 	}
 
-	return &Request{RequestLine{HttpVersion: version, RequestTarget: target, Method: method}}, nil
+	return &Line{HTTPVersion: version, Target: target, Method: method}, nil
 }
