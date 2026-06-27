@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	msgFile = "messages.txt"
 	bufSize = 8
 	port    = "42069"
 	address = "0:" + port
