@@ -26,27 +26,25 @@ func main() {
 		log.Fatalf("error opening file: %s for reading: %s", msgFile, err)
 	}
 
-	for line := range getLinesChannel(file) {
+	chunks := readFileInChunks(file)
+	for line := range chunksToLines(chunks) {
 		log.Println("read:", line)
 	}
 }
 
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	lines := make(chan string)
-
+func readFileInChunks(f io.ReadCloser) <-chan string {
 	buf := make([]byte, bufSize)
-
-	var s strings.Builder
+	words := make(chan string)
 
 	go func() {
 		defer f.Close()
-		defer close(lines)
+		defer close(words)
 
 		for {
 			n, err := f.Read(buf)
 			if err != nil {
-				if n == 0 && errors.Is(err, io.EOF) {
-					lines <- s.String()
+				if errors.Is(err, io.EOF) {
+					words <- string(buf[:n])
 
 					return
 				}
@@ -55,25 +53,33 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 
 				return
 			}
-
-			parts := strings.Split(string(buf[:n]), "\n")
-
-			for i, part := range parts {
-				if i >= 1 {
-					lines <- s.String()
-
-					s.Reset()
-				}
-
-				_, err = s.WriteString(part)
-				if err != nil {
-					log.Printf("error writing to strings.Builder: %s", err)
-
-					break
-				}
-			}
+			words <- string(buf[:n])
 		}
 	}()
 
+	return words
+}
+
+func chunksToLines(chunks <-chan string) <-chan string {
+	lines := make(chan string)
+
+	var s string = ""
+
+	go func() {
+		defer close(lines)
+
+		for chunk := range chunks {
+			parts := strings.Split(chunk, "\n")
+
+			for i, part := range parts {
+				if i >= 1 {
+					lines <- s
+					s = ""
+				}
+				s += part
+			}
+		}
+		lines <- s
+	}()
 	return lines
 }
