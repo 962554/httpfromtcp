@@ -51,7 +51,7 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 					return
 				}
 
-				log.Printf("error reading file: %s: %s\n", msgFile, err)
+				log.Printf("error reading: %s\n", err)
 
 				return
 			}
